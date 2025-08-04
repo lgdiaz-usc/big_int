@@ -1,7 +1,8 @@
-use std::fmt;
+use std::{cell::RefCell, fmt, ops::{Add, AddAssign}, rc::Rc};
 
+#[derive(Clone)]
 struct BigInt {
-    inner: Vec<u8>
+    inner: Rc<RefCell<Vec<u8>>>
 }
 
 impl BigInt {
@@ -30,7 +31,89 @@ impl BigInt {
         }
 
         Self {
-            inner: data
+            inner: Rc::new(RefCell::new(data))
+        }
+    }
+
+    fn trim(self) {
+        let mut inner = self.inner.borrow_mut();
+        while inner[inner.len() - 1] == 0 && inner.len() > 1 {
+            inner.pop();
+        }
+    }
+}
+
+impl Add for BigInt {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        let mut output = Vec::new();
+
+        let (smaller_num, bigger_num) = if self.inner.borrow().len() < rhs.inner.borrow().len() {
+            (self.inner.borrow(), rhs.inner.borrow())
+        }
+        else {
+            (rhs.inner.borrow(), self.inner.borrow())
+        };
+
+        let mut will_carry = false;
+        for i in 0..smaller_num.len() {
+            let mut byte = smaller_num[i] + bigger_num[i];
+            if will_carry {
+                byte += 1;
+            }
+        
+            will_carry = (!will_carry && byte < smaller_num[i]) || (will_carry && byte <= smaller_num[i]);
+            output.push(byte);
+        }
+
+        for i in smaller_num.len()..bigger_num.len() {
+            output.push(bigger_num[i]);
+            if will_carry {
+                output[i] += 1;
+            }
+
+            will_carry = (!will_carry && output[i] < bigger_num[i]) || (will_carry && output[i] <= bigger_num[i]);
+        }
+
+        if will_carry {
+            output.push(1);
+        }
+
+        Self {
+            inner: Rc::new(RefCell::new(output))
+        }
+    }
+}
+
+impl AddAssign for BigInt {
+    fn add_assign(&mut self, rhs: Self) {
+        let mut inner_l = self.inner.borrow_mut();
+        let inner_r = rhs.inner.borrow();
+
+        let min_length = inner_l.len().min(inner_r.len());
+        let mut will_carry = false;
+        for i in 0..min_length {
+            let mut byte = inner_r[i] + inner_l[i];
+            if will_carry {
+                byte += 1;
+            }
+        
+            will_carry = (!will_carry && byte < inner_l[i]) || (will_carry && byte <= inner_l[i]);
+            inner_l[i] = byte;
+        }
+
+        for i in min_length..inner_r.len() {
+            inner_l.push(inner_r[i]);
+            if will_carry {
+                inner_l[i] += 1;
+            }
+
+            will_carry = (!will_carry && inner_l[i] < inner_r[i]) || (will_carry && inner_l[i] <= inner_r[i]);
+        }
+
+        if will_carry {
+            inner_l.push(1);
         }
     }
 }
@@ -43,7 +126,8 @@ impl fmt::Display for BigInt {
 
 impl fmt::Binary for BigInt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut inner_iter = self.inner.iter().rev();
+        let inner = self.inner.borrow();
+        let mut inner_iter = inner.iter().rev();
         let mut output = String::new();
 
         if let Some(byte) = inner_iter.next() {
@@ -60,7 +144,8 @@ impl fmt::Binary for BigInt {
 
 impl fmt::UpperHex for BigInt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut inner_iter = self.inner.iter().rev();
+        let inner = self.inner.borrow();
+        let mut inner_iter = inner.iter().rev();
         let mut output = String::new();
 
         if let Some(byte) = inner_iter.next() {
@@ -77,7 +162,8 @@ impl fmt::UpperHex for BigInt {
 
 impl fmt::LowerHex for BigInt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut inner_iter = self.inner.iter().rev();
+        let inner = self.inner.borrow();
+        let mut inner_iter = inner.iter().rev();
         let mut output = String::new();
 
         if let Some(byte) = inner_iter.next() {
@@ -109,5 +195,22 @@ mod tests {
         assert_eq!(format!("{:06X}", hex_test), "04A609");
         assert_eq!(format!("{:x}", hex_test), "4a609");
         assert_eq!(format!("{:06x}", hex_test), "04a609");
+    }
+
+    #[test]
+    fn test_addition() {
+        let mut basic_adder = BigInt::new_16("2");
+        let overflow_adder = BigInt::new_16("FF");
+        let bigger_num_overflow_adder = BigInt::new_16("FFFF");
+        let even_bigger_num_adder = BigInt::new_16("10FFFFFF");
+
+        assert_eq!(format!("{:x}", basic_adder.clone() + basic_adder.clone()), "4");
+        assert_eq!(format!("{:x}", basic_adder.clone() + overflow_adder.clone()), "101");
+        assert_eq!(format!("{:x}", basic_adder.clone() + bigger_num_overflow_adder.clone()), "10001");
+        assert_eq!(format!("{:x}", basic_adder.clone() + even_bigger_num_adder.clone()), "11000001");
+        assert_eq!(format!("{:x}", even_bigger_num_adder.clone() + basic_adder.clone()), "11000001");
+
+        basic_adder += even_bigger_num_adder.clone();
+        assert_eq!(format!("{:x}", basic_adder), "11000001");
     }
 }
