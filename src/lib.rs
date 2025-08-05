@@ -1,8 +1,9 @@
-use std::{cell::RefCell, fmt, ops::{Add, AddAssign}, rc::Rc};
+use std::{cell::RefCell, cmp::Ordering, fmt, ops::{Add, AddAssign}, rc::Rc};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct BigInt {
-    inner: Rc<RefCell<Vec<u8>>>
+    inner: Rc<RefCell<Vec<u8>>>,
+    is_negative: bool
 }
 
 impl BigInt {
@@ -31,7 +32,8 @@ impl BigInt {
         }
 
         Self {
-            inner: Rc::new(RefCell::new(data))
+            inner: Rc::new(RefCell::new(data)),
+            is_negative: false,
         }
     }
 
@@ -42,6 +44,45 @@ impl BigInt {
         }
     }
 }
+
+/*
+ *
+ *  COMPARISON TRAITS
+ * 
+ */
+
+impl Ord for BigInt {
+    fn cmp(&self, rhs: &Self) -> Ordering {
+        if self.is_negative == rhs.is_negative {
+            let inner_l = self.inner.borrow();
+            let inner_r = rhs.inner.borrow();
+            let iter_l = inner_l.iter().rev();
+            let iter_r = inner_r.iter().rev();
+            let order = iter_l.cmp(iter_r);
+
+            if self.is_negative {
+                return order.reverse();
+            }
+
+            order
+        }
+        else {
+            self.is_negative.cmp(&rhs.is_negative).reverse()
+        }
+    }
+}
+
+impl PartialOrd for BigInt {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        Some(self.cmp(rhs))
+    }
+}
+
+/*
+ *
+ *  ARITHMETIC TRAITS
+ * 
+*/
 
 impl Add for BigInt {
     type Output = Self;
@@ -81,7 +122,8 @@ impl Add for BigInt {
         }
 
         Self {
-            inner: Rc::new(RefCell::new(output))
+            inner: Rc::new(RefCell::new(output)),
+            is_negative: false
         }
     }
 }
@@ -117,6 +159,13 @@ impl AddAssign for BigInt {
         }
     }
 }
+
+
+/*
+ *
+ * FORMATTING TRAITS
+ * 
+ */
 
 impl fmt::Display for BigInt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -212,5 +261,23 @@ mod tests {
 
         basic_adder += even_bigger_num_adder.clone();
         assert_eq!(format!("{:x}", basic_adder), "11000001");
+    }
+
+    #[test]
+    fn test_comparison() {
+        let eq_1 = BigInt::new_16("AA1");
+        let eq_2 = BigInt::new_16("AA1");
+        let eq_3 = BigInt::new_16("AA2");
+        let eq_4 = BigInt::new_16("1AA1");
+        let eq_5 = BigInt {
+            inner: Rc::new(RefCell::new(vec![0xA1, 0x1A])),
+            is_negative: true
+        };
+
+        assert!(eq_1.clone() == eq_2.clone());
+        assert!(eq_1.clone() == eq_1.clone());
+        assert!(eq_1.clone() != eq_3.clone());
+        assert!(eq_3.clone() < eq_4.clone());
+        assert!(eq_5.clone() < eq_4.clone());
     }
 }
