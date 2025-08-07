@@ -1,4 +1,4 @@
-use std::{cell::RefCell, cmp::Ordering, fmt, ops::{Add, AddAssign, Neg, Sub, SubAssign}, rc::Rc};
+use std::{cell::RefCell, cmp::Ordering, fmt, ops::{Add, AddAssign, Neg, Sub, SubAssign}, process::Output, rc::Rc};
 
 #[derive(Clone, Debug)]
 struct BigInt {
@@ -117,69 +117,29 @@ impl Add for BigInt {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self {
-        match (self.is_negative, rhs.is_negative) {
-            (true, true) => return -(self.abs() + rhs.abs()),
-            (true, false) => return -(self.abs() - rhs),
-            (false, true) => return self - rhs.abs(),
-            _ => {}
-        }
+        let mut output = self.deep_clone();
+        output += rhs;
 
-        let mut output = Vec::new();
-
-        let (smaller_num, bigger_num) = if self.inner.borrow().len() < rhs.inner.borrow().len() {
-            (self.inner.borrow(), rhs.inner.borrow())
-        }
-        else {
-            (rhs.inner.borrow(), self.inner.borrow())
-        };
-
-        let mut will_carry = false;
-        for i in 0..smaller_num.len() {
-            let mut byte = smaller_num[i] + bigger_num[i];
-            if will_carry {
-                byte += 1;
-            }
-        
-            will_carry = (!will_carry && byte < smaller_num[i]) || (will_carry && byte <= smaller_num[i]);
-            output.push(byte);
-        }
-
-        for i in smaller_num.len()..bigger_num.len() {
-            output.push(bigger_num[i]);
-            if will_carry {
-                output[i] += 1;
-            }
-
-            will_carry = (!will_carry && output[i] < bigger_num[i]) || (will_carry && output[i] <= bigger_num[i]);
-        }
-
-        if will_carry {
-            output.push(1);
-        }
-
-        Self {
-            inner: Rc::new(RefCell::new(output)),
-            is_negative: false
-        }
+        output
     }
 }
 
 impl AddAssign for BigInt {
     fn add_assign(&mut self, rhs: Self) {
         match (self.is_negative, rhs.is_negative) {
-            (true, true) => {
+            (true, true) => { // -(self.abs() + rhs.abs())
                 self.is_negative = false;
                 *self += rhs.abs();
                 self.is_negative = !self.is_negative;
                 return;
             },
-            (true, false) => {
+            (true, false) => { // -(self.abs() - rhs)
                 self.is_negative = false;
                 *self -= rhs;
                 self.is_negative = !self.is_negative;
                 return;
             },
-            (false, true) => {
+            (false, true) => { // self - rhs.abs()
                 *self -= rhs.abs();
                 return;
             },
@@ -189,27 +149,30 @@ impl AddAssign for BigInt {
         let mut inner_l = self.inner.borrow_mut();
         let inner_r = rhs.inner.borrow();
 
-        let min_length = inner_l.len().min(inner_r.len());
         let mut will_carry = false;
+
+        // For the portion where inner_l and inner_r overlap, add values form the two with carry bits
+        let min_length = inner_l.len().min(inner_r.len());
         for i in 0..min_length {
-            let mut byte = inner_r[i] + inner_l[i];
-            if will_carry {
-                byte += 1;
-            }
-        
-            will_carry = (!will_carry && byte < inner_l[i]) || (will_carry && byte <= inner_l[i]);
-            inner_l[i] = byte;
+            (inner_l[i], will_carry) = inner_l[i].overflowing_add(inner_r[i] + if will_carry {1} else {0});
         }
 
-        for i in min_length..inner_r.len() {
+        //if inner_r is longer than inner_l, copy inner_r to inner_l and propagate carry bits
+        for i in inner_l.len()..inner_r.len() {
             inner_l.push(inner_r[i]);
             if will_carry {
-                inner_l[i] += 1;
+                (inner_l[i], will_carry) = inner_l[i].overflowing_add(1);
             }
-
-            will_carry = (!will_carry && inner_l[i] < inner_r[i]) || (will_carry && inner_l[i] <= inner_r[i]);
         }
 
+        //if inner_l is longer than inner_r, propagate carry bits through the rest of inner_l
+        for i in inner_r.len()..inner_l.len() {
+            if will_carry {
+                (inner_l[i], will_carry) = inner_l[i].overflowing_add(1);
+            }
+        }
+
+        //if there is still a carry bit left after all this, stick it at the end of inner_l
         if will_carry {
             inner_l.push(1);
         }
@@ -220,46 +183,8 @@ impl Sub for BigInt {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self {
-        match (self.is_negative, rhs.is_negative) {
-            (true, true) => return -(self.abs() - rhs.abs()),
-            (true, false) => return -(self.abs() + rhs),
-            (false, true) => return self + rhs.abs(),
-            (false, false) => {
-                if self < rhs {
-                    return -(rhs - self);
-                }
-            }
-        }
-
-        let inner_l = self.inner.borrow();
-        let inner_r = rhs.inner.borrow();
-        let mut output = Vec::new();
-
-        let mut will_borrow = false;
-        for i in 0..inner_r.len() {
-            let mut byte = inner_l[i] - inner_r[i];
-            if will_borrow {
-                byte -= 1;
-            }
-
-            will_borrow = (!will_borrow && byte > inner_l[i]) || (will_borrow && byte >= inner_l[i]);
-            output.push(byte);
-        }
-
-        for i in inner_r.len()..inner_l.len() {
-            output.push(inner_l[i]);
-            if will_borrow {
-                output[i] -= 1;
-            }
-
-            will_borrow = (!will_borrow && output[i] > inner_l[i]) || (will_borrow && output[i] >= inner_l[i]);
-        }
-
-        let mut output = Self {
-            inner: Rc::new(RefCell::new(output)), 
-            is_negative: false 
-        };
-        output.trim();
+        let mut output = self.deep_clone();
+        output -= rhs;
 
         output
     }
@@ -268,25 +193,25 @@ impl Sub for BigInt {
 impl SubAssign for BigInt {
     fn sub_assign(&mut self, rhs: Self) {
         match (self.is_negative, rhs.is_negative) {
-            (true, true) => { //-(self.abs() - rhs.abs())
+            (true, true) => { // -(self.abs() - rhs.abs())
                 self.is_negative = false;
                 *self -= rhs.abs();
                 self.is_negative = !self.is_negative;
                 return;
             },
-            (true, false) => { //-(self.abs() + rhs)
+            (true, false) => { // -(self.abs() + rhs)
                 self.is_negative = false;
                 *self += rhs;
                 self.is_negative = !self.is_negative;
                 return;
             },
-            (false, true) => { //self + rhs.abs()
+            (false, true) => { // self + rhs.abs()
                 *self += rhs.abs();
                 return;
             },
             (false, false) => {
-                if *self < rhs { //-(rhs - self)
-                    let mut rhs = rhs;
+                if *self < rhs { // -(rhs - self)
+                    let mut rhs = rhs.deep_clone();
                     std::mem::swap(self, &mut rhs);
                     *self -= rhs;
                     self.is_negative = !self.is_negative;
@@ -299,26 +224,20 @@ impl SubAssign for BigInt {
         let inner_r = rhs.inner.borrow();
 
         let mut will_borrow = false;
+
+        //for the portion where inner_l and inner_r overlap, subtract values from the twwo while keeping track of borrow bits
         for i in 0..inner_r.len() {
-            let mut byte = inner_l[i] - inner_r[i];
-            if will_borrow {
-                byte -= 1;
-            }
-
-            will_borrow = (!will_borrow && byte > inner_l[i]) || (will_borrow && byte >= inner_l[i]);
-            inner_l[i] = byte;
+            (inner_l[i], will_borrow) = inner_l[i].overflowing_sub(inner_r[i] + if will_borrow {1} else {0});
         }
 
+        //if inner_l is longer than inner_r, propagate borrow bits throughout rest of inner_l
         for i in inner_r.len()..inner_l.len() {
-            let mut byte = inner_l[i];
             if will_borrow {
-                byte -= 1;
+                (inner_l[i], will_borrow) = inner_l[i].overflowing_sub(1);
             }
-
-            will_borrow = (!will_borrow && byte > inner_l[i]) || (will_borrow && byte >= inner_l[i]);
-            inner_l[i] = byte
         }
 
+        //remove any extra 0 bytes from the end of inner_l
         drop(inner_l);
         self.trim();
     }
