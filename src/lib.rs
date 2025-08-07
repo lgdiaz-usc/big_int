@@ -1,4 +1,4 @@
-use std::{cell::RefCell, cmp::Ordering, fmt, ops::{Add, AddAssign, Neg, Sub, SubAssign}, process::Output, rc::Rc};
+use std::{cell::RefCell, cmp::Ordering, fmt, ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign}, rc::Rc};
 
 #[derive(Clone, Debug)]
 struct BigInt {
@@ -243,6 +243,69 @@ impl SubAssign for BigInt {
     }
 }
 
+impl Mul for BigInt {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let mut output = self.deep_clone();
+        output *= rhs;
+
+        output
+    }
+}
+
+impl MulAssign for BigInt {
+    fn mul_assign(&mut self, rhs: Self) {
+        match (self.is_negative, rhs.is_negative) {
+            (true, true) => { // self.abs() * rhs.abs()
+                self.is_negative = false;
+                *self *= rhs.abs();
+                return;
+            }
+            (true, false) |
+            (false, true) => { // -(self.abs() * rhs.abs())
+                self.is_negative = false;
+                *self *= rhs.abs();
+                self.is_negative = true;
+                return;
+            }
+            _ => {}
+        }
+
+        let mut inner_l = self.inner.borrow_mut();
+        let inner_r = rhs.inner.borrow();
+
+        let mut carry = 0;
+
+        let mut products_to_sum = Vec::new();
+        for i in 0..inner_l.len() {
+            let mut inner_p = vec![0; i];
+            
+            let left = inner_l[i];
+            for right in inner_r.iter() {
+                let byte;
+                (carry, byte) = (left as u16 * *right as u16 + carry as u16).to_be_bytes().into();
+                inner_p.push(byte);
+            }
+            
+            if carry > 0 {
+                inner_p.push(carry);
+                carry = 0;
+            }
+
+            products_to_sum.push(BigInt {inner: Rc::new(RefCell::new(inner_p)), is_negative: false});
+            products_to_sum[i].trim();
+        }
+        
+        inner_l.clear();
+        inner_l.push(0);
+        drop(inner_l);
+        for i in products_to_sum {
+            *self += i;
+        }
+    }
+}
+
 impl Neg for BigInt {
     type Output = Self;
 
@@ -429,5 +492,24 @@ mod tests {
         let mut assign_sign_4 = basic_sub_2.deep_clone();
         assign_sign_4 -= basic_sub_1.clone();
         assert_eq!(format!("{:x}", assign_sign_4), "-2");
+    }
+
+    #[test]
+    fn test_multpilication() {
+        let basic_multiply = BigInt::new_16("10");
+        let big_multiply = BigInt::new_16("1A45");
+
+        assert_eq!(format!("{:x}", basic_multiply.clone() * big_multiply.clone()), "1a450");
+        assert_eq!(format!("{:x}", big_multiply.clone() * basic_multiply.clone()), "1a450");
+
+        let big_multiply_1 = BigInt::new_16("16d92d9");
+        let big_multiply_2 = BigInt::new_16("16c6");
+
+        assert_eq!(format!("{:x}", big_multiply_1.clone() * big_multiply_2.clone()), "20855e39d6");
+        assert_eq!(format!("{:x}", big_multiply_2.clone() * big_multiply_1.clone()), "20855e39d6");
+
+        assert_eq!(format!("{:x}", -big_multiply_2.clone() * big_multiply_1.clone()), "-20855e39d6");
+        assert_eq!(format!("{:x}", big_multiply_2.clone() * -big_multiply_1.clone()), "-20855e39d6");
+        assert_eq!(format!("{:x}", -big_multiply_2.clone() * -big_multiply_1.clone()), "20855e39d6");
     }
 }
