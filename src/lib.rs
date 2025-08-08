@@ -1,10 +1,12 @@
-use std::{cell::RefCell, cmp::Ordering, fmt, ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign}, rc::Rc};
+use std::{cell::RefCell, cmp::Ordering, fmt, ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Sub, SubAssign}, rc::Rc};
 
 #[derive(Clone, Debug)]
 struct BigInt {
     inner: Rc<RefCell<Vec<u8>>>,
     is_negative: bool
 }
+
+const BITS: u32 = u8::BITS;
 
 impl BigInt {
     fn new_16(input: &str) -> Self {
@@ -306,6 +308,69 @@ impl MulAssign for BigInt {
     }
 }
 
+/*impl Div for BigInt {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        let mut output = self.deep_clone();
+        output /= rhs;
+
+        output
+    }
+}
+
+impl DivAssign for BigInt {
+    fn div_assign(&mut self, rhs: Self) {
+        match (self.is_negative, rhs.is_negative) {
+            (true, true) => { // self.abs / rhs.abs
+                self.is_negative = false;
+                *self /= rhs.abs();
+                return;
+            },
+            (true, false) |
+            (false, true) => { // -(self.abs / rhs.abs())
+                self.is_negative = false;
+                *self /= rhs.abs();
+                self.is_negative = true;
+            }
+            _ => {}
+        }
+
+
+    }
+}
+
+fn div_with_remainder(numerator: &BigInt, denominator: &BigInt) -> (BigInt, BigInt) {
+    if denominator.is_zero() {
+        panic!("Cannot divide by zero!");
+    }
+    else if numerator.is_zero() {
+        return (numerator.deep_clone(), numerator.deep_clone());
+    }
+    else if numerator < denominator {
+        return (BigInt::new_16("0"), numerator.deep_clone());
+    }
+
+    let inner_l = numerator.inner.borrow();
+    let inner_r = denominator.inner.borrow();
+
+    let mut quotient = BigInt::new_16("0");
+    let mut remainder = {
+        let inner = inner_l[0..inner_r.len()-2]
+            .iter()
+            .map(|x| *x)
+            .collect();
+        BigInt { inner: Rc::new(RefCell::new(inner)), is_negative: false }
+    };
+    let mut dividend = numerator.deep_clone();
+
+    for i in inner_l.len() - inner_r.len() {
+
+    }
+
+    (quotient, remainder)
+}*/
+
 impl Neg for BigInt {
     type Output = Self;
 
@@ -316,6 +381,68 @@ impl Neg for BigInt {
         }
     }
 }
+
+/*
+* 
+* BINARY TRAITS
+*
+*/
+
+macro_rules! shl_impl {
+    ($f:ty) => {
+        impl Shl<$f> for BigInt {
+            type Output = BigInt;
+
+            fn shl(self, rhs: $f) -> BigInt {
+                let mut output = self.deep_clone();
+                output <<= rhs;
+                
+                output
+            }
+        }
+
+        #[allow(unused_comparisons)]
+        impl ShlAssign<$f> for BigInt {
+            fn shl_assign(&mut self, rhs: $f) {
+                if rhs < 0 {
+                    panic!("TODO: Implement Shift Right");
+                }
+
+                let small_shift = rhs % BITS as $f;
+                let big_shift = rhs / BITS as $f;
+
+                let mut carry = 0;
+
+                let mut inner = self.inner.borrow_mut();
+                for i in 0..inner.len() {
+                    let mut byte = inner[i] << small_shift;
+                    let will_carry = byte.count_ones() != inner[i].count_ones();
+                    
+                    if carry > 0 {
+                        byte |= carry
+                    }
+
+                    carry = if will_carry {inner[i] >> (BITS as $f - small_shift)} else {0};
+
+                    inner[i] = byte;
+                }
+
+                if carry > 0 {
+                    inner.push(carry);
+                }
+
+                if big_shift > 0 {
+                    let mut big = vec![0; big_shift as usize];
+                    inner.append(&mut big);
+                    inner.rotate_right(big_shift as usize);
+                }
+            }
+        }
+    };
+}
+
+shl_impl!{u8} shl_impl! {u16} shl_impl! {u32} shl_impl! {u64} shl_impl! {u128} shl_impl! {usize}
+shl_impl!{i8} shl_impl! {i16} shl_impl! {i32} shl_impl! {i64} shl_impl! {i128} shl_impl! {isize}
 
 /*
  *
@@ -511,5 +638,23 @@ mod tests {
         assert_eq!(format!("{:x}", -big_multiply_2.clone() * big_multiply_1.clone()), "-20855e39d6");
         assert_eq!(format!("{:x}", big_multiply_2.clone() * -big_multiply_1.clone()), "-20855e39d6");
         assert_eq!(format!("{:x}", -big_multiply_2.clone() * -big_multiply_1.clone()), "20855e39d6");
+
+        let zero = BigInt::new_16("0");
+        let one = BigInt::new_16("1");
+
+        assert_eq!(format!("{:x}", big_multiply_1.clone() * zero.clone()), "0");
+        assert_eq!(format!("{:x}", zero.clone() * big_multiply_1.clone()), "0");
+        assert_eq!(format!("{:x}", big_multiply_1.clone() * one.clone()), "16d92d9");
+        assert_eq!(format!("{:x}", one.clone() * big_multiply_1.clone()), "16d92d9");
+    }
+
+    #[test]
+    fn test_shift() {
+        let shifted_num = BigInt::new_16("5467A");
+        let shift_amount_1 = 16;
+        let shift_amount_2 = 12;
+
+        assert_eq!(format!("{:x}", shifted_num.clone() << shift_amount_1), "5467a0000");
+        assert_eq!(format!("{:x}", shifted_num.clone() << shift_amount_2), "5467a000");
     }
 }
