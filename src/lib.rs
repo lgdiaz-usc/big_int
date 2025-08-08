@@ -1,18 +1,19 @@
-use std::{cell::RefCell, cmp::Ordering, fmt, ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Shl, ShlAssign, Shr, ShrAssign, Sub, SubAssign}, rc::Rc};
+use std::{array, cell::RefCell, cmp::Ordering, fmt, ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Shl, ShlAssign, Shr, ShrAssign, Sub, SubAssign}, rc::Rc};
 
 #[derive(Clone, Debug)]
 struct BigInt {
-    inner: Rc<RefCell<Vec<u8>>>,
+    inner: Rc<RefCell<Vec<Word>>>,
     is_negative: bool
 }
 
-const BITS: u32 = u8::BITS;
+use u8 as Word;
+const BITS: u32 = Word::BITS;
 
 impl BigInt {
     fn new_16(input: &str) -> Self {
-        let mut data = Vec::new();
+        const HEX_DIGIT: usize = BITS as usize / 4;
 
-        let mut input_iter = input
+        let input_iter: Vec<u8> = input
             .chars()
             .rev()
             .map(|c| {
@@ -22,21 +23,63 @@ impl BigInt {
                 else {
                     panic!("ERROR: Invalid Hexdigit \'{}\'", c);
                 }
-            });
+            })
+            .collect();
+        let data = input_iter
+            .chunks(HEX_DIGIT)
+            .map(|hex_digits| {
+                let mut hex_bytes = [0; HEX_DIGIT];
+                for i in 0..hex_digits.len() {
+                    hex_bytes[i] = hex_digits[i];
+                }
 
-        while let Some(hex_digit_0) = input_iter.next() {
+                let bytes: [u8; HEX_DIGIT / 2] = array::from_fn(|x| {
+                    hex_bytes[x * 2] | (hex_bytes[x * 2 + 1] << 4)
+                });
+
+                Word::from_le_bytes(bytes)
+            })
+            .collect();
+
+
+        /*while let Some(hex_digit_0) = input_iter.next() {
             if let Some(hex_digit_1) = input_iter.next() {
                 data.push(hex_digit_0 | (hex_digit_1 << 4));
             }
             else {
                 data.push(hex_digit_0);
             }
-        }
+        }*/
 
         Self {
             inner: Rc::new(RefCell::new(data)),
             is_negative: false,
         }
+    }
+
+    fn new_10(input: &str) -> Self {
+        let base = BigInt::new_16("A");
+        let mut data = BigInt::new_16("0");
+
+        let input_iter = input
+            .chars()
+            .map(|c| {
+                if let Some(digit) = c.to_digit(10) {
+                    digit as Word
+                }
+                else {
+                    panic!("ERROR: Invalid digit \'{}\'", c);
+                }
+            });
+
+        let big_digit = BigInt {inner: Rc::new(RefCell::new(vec![0])), is_negative: false};
+        for digit in input_iter {
+            big_digit.inner.borrow_mut()[0] = digit;
+            data *= base.clone();
+            data += big_digit.clone();
+        }
+
+        data
     }
 
     fn deep_clone(&self) -> Self {
@@ -637,6 +680,7 @@ mod tests {
         let hex_test = BigInt::new_16("4A609");
         let neg_test = -BigInt::new_16("A1");
         let neg_zero = -BigInt::new_16("0");
+        let dec_test = BigInt::new_10("1229026");
 
         assert_eq!(format!("{}", format_works), "test");
         assert_eq!(format!("{:b}", binary_test), "1111100011010");
@@ -647,6 +691,7 @@ mod tests {
         assert_eq!(format!("{:06x}", hex_test), "04a609");
         assert_eq!(format!("{:#x}", neg_test), "-0xa1");
         assert_eq!(format!("{:x}", neg_zero), "0");
+        assert_eq!(format!("{:x}", dec_test), "12c0e2");
     }
 
     #[test]
