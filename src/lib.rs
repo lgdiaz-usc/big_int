@@ -7,6 +7,7 @@ struct BigInt {
 }
 
 use u8 as Word;
+use u16 as DoubleWord;
 const BITS: u32 = Word::BITS;
 
 impl BigInt {
@@ -335,7 +336,13 @@ impl MulAssign for BigInt {
             let left = inner_l[i];
             for right in inner_r.iter() {
                 let byte;
-                (carry, byte) = (left as u16 * *right as u16 + carry as u16).to_be_bytes().into();
+                let double_byte = (left as DoubleWord * *right as DoubleWord + carry as DoubleWord).to_le();
+                (carry, byte) = unsafe {
+                    #[cfg( target_endian = "big")]
+                    let double_byte = double_byte.swap_bytes();
+                    let words: [Word; 2] = std::mem::transmute(double_byte);
+                    (words[1], words[0])
+                };
                 inner_p.push(byte);
             }
             
