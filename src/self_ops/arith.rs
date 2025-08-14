@@ -187,9 +187,9 @@ impl MulAssign for BigInt {
                 let byte;
                 let double_byte = (left as DoubleWord * *right as DoubleWord + carry as DoubleWord).to_le();
                 (carry, byte) = unsafe {
-                    #[cfg( target_endian = "big")]
-                    let double_byte = double_byte.swap_bytes();
                     let words: [Word; 2] = std::mem::transmute(double_byte);
+                    #[cfg(target_endian = "big")]
+                    let words = [words[0].swap_bytes, words[1].swap_bytes];
                     (words[1], words[0])
                 };
                 inner_p.push(byte);

@@ -158,4 +158,25 @@ mod tests {
         assert_eq!(format!("{:x}", shifted_num.clone() << -shift_amount_2), "54");
         assert_eq!(format!("{:x}", shifted_num.clone() >> -shift_amount_2), "5467a000");
     }
+
+    #[test]
+    fn test_cast() {
+        let u_8: u8 = 0xF7;
+        let u_16: u16 = 0x2348;
+        let u_32: u32 = 0x84923837;
+        let u_64: u64 = 0x123456789abcdef;
+        let i_8: i8 = -0x12;
+        let i_16: i16 = -1234;
+        let i_32: i32 = 0x45348893;
+        let i_64: i64 = 0x123456789abcdef;
+
+        assert_eq!(BigInt::new_10(&u_8.to_string()), u_8.into());
+        assert_eq!(BigInt::new_10(&u_16.to_string()), u_16.into());
+        assert_eq!(BigInt::new_10(&u_32.to_string()), u_32.into());
+        assert_eq!(BigInt::new_10(&u_64.to_string()), u_64.into());
+        assert_eq!(-BigInt::new_16("12"), i_8.into());
+        assert_eq!(-BigInt::new_10("1234"), i_16.into());
+        assert_eq!(BigInt::new_10(&i_32.to_string()), i_32.into());
+        assert_eq!(BigInt::new_10(&i_64.to_string()), i_64.into());
+    }
 }

@@ -1,7 +1,7 @@
 use std::{array, cell::RefCell, cmp::Ordering, fmt, rc::Rc};
 
-mod arith;
-mod binary_arith;
+mod prim_ops;
+mod self_ops;
 
 #[derive(Clone, Debug)]
 pub struct BigInt {
