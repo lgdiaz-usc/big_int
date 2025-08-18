@@ -53,6 +53,9 @@ mod tests {
         assert_eq!(format!("{:x}", assign_sign_1), "0");
         assert_eq!(format!("{:x}", assign_sign_2), "-4");
         assert_eq!(format!("{:x}", assign_sign_3), "0");
+
+        assert_eq!(format!("{:x}", basic_adder.clone() + 2), "4");
+        assert_eq!(format!("{:x}", 2 + basic_adder.clone()), "4");
     }
 
     #[test]
