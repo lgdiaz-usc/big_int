@@ -173,14 +173,19 @@ impl MulAssign for BigInt {
             _ => {}
         }
 
-        let mut inner_l = self.inner.borrow_mut();
+        let inner_l = self.inner.borrow();
         let inner_r = rhs.inner.borrow();
 
         let mut carry = 0;
 
-        let mut products_to_sum = Vec::new();
+        let mut sum = BigInt::from(0);
+        let mut product_to_sum = BigInt::from(0);
         for i in 0..inner_l.len() {
-            let mut inner_p = vec![0; i];
+            let mut inner_p = product_to_sum.inner.borrow_mut();
+            inner_p.clear();
+            for _ in 0..i {
+                inner_p.push(0);
+            }
             
             let left = inner_l[i];
             for right in inner_r.iter() {
@@ -200,16 +205,13 @@ impl MulAssign for BigInt {
                 carry = 0;
             }
 
-            products_to_sum.push(BigInt {inner: Rc::new(RefCell::new(inner_p)), is_negative: false});
-            products_to_sum[i].trim();
+            drop(inner_p);
+            product_to_sum.trim();
+            sum += product_to_sum.clone();
         }
         
-        inner_l.clear();
-        inner_l.push(0);
         drop(inner_l);
-        for i in products_to_sum {
-            *self += i;
-        }
+        *self = sum;
     }
 }
 
