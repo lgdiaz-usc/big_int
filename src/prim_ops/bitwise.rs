@@ -4,7 +4,7 @@
 *
 */
 
-use std::ops::{Shl, ShlAssign, Shr, ShrAssign};
+use std::ops::{BitOr, BitOrAssign, Shl, ShlAssign, Shr, ShrAssign};
 
 use crate::{BigInt, BITS};
 
@@ -119,3 +119,32 @@ macro_rules! shr_impl {
 
 shr_impl!{u8} shr_impl! {u16} shr_impl! {u32} shr_impl! {u64} shr_impl! {u128} shr_impl! {usize}
 shr_impl!{i8} shr_impl! {i16} shr_impl! {i32} shr_impl! {i64} shr_impl! {i128} shr_impl! {isize}
+
+macro_rules! impl_ops {
+    ($f:ty) => {
+        impl BitOr<BigInt> for $f {
+            type Output = BigInt;
+
+            fn bitor(self, rhs: BigInt) -> Self::Output {
+                BigInt::from(self) | rhs
+            }
+        }
+
+        impl BitOr<$f> for BigInt {
+            type Output = Self;
+        
+            fn bitor(self, rhs: $f) -> Self::Output {
+                self | BigInt::from(rhs)
+            }
+        }
+
+        impl BitOrAssign<$f> for BigInt {
+            fn bitor_assign(&mut self, rhs: $f) {
+                *self |= BigInt::from(rhs);
+            }
+        }
+    };
+}
+
+impl_ops!(u8); impl_ops!(u16); impl_ops!(u32); impl_ops!(u64); impl_ops!(u128); impl_ops!(usize);
+impl_ops!(i8); impl_ops!(i16); impl_ops!(i32); impl_ops!(i64); impl_ops!(i128); impl_ops!(isize); 
