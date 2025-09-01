@@ -1,2 +1,2 @@
-mod arith;
+pub mod arith;
 mod bitwise;

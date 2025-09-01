@@ -61,6 +61,38 @@ impl BigInt {
         }
     }
 
+    pub fn new_8(input: &str) -> Self {
+        const OCTET_LIMIT: usize = BITS as usize / 3;
+
+        let input_iter: Vec<Word> = input
+            .chars()
+            .map(|c| {
+                if let Some(octet) = c.to_digit(8) {
+                    octet as Word
+                }
+                else {
+                    panic!("ERROR: Invalid Octet \'{}\'", c);
+                }
+            })
+            .collect();
+
+        let mut data = BigInt::from(0);
+
+        input_iter
+            .chunks(OCTET_LIMIT)
+            .for_each(|octets| {
+                let mut word = 0;
+                for i in 0..octets.len() {
+                    word |= octets[i] << (3*(octets.len() - 1 - i));
+                }
+
+                data <<= 3 * octets.len();
+                data |= word;
+            });
+
+        data
+    }
+
     pub fn new_10(input: &str) -> Self {
         let base = BigInt::new_16("A");
         let mut data = BigInt::new_16("0");
@@ -84,6 +116,40 @@ impl BigInt {
         }
 
         data
+    }
+
+    pub fn new_2(input: &str) -> Self {
+        let input_iter: Vec<bool> = input
+            .chars()
+            .rev()
+            .map(|c| {
+                if let Some(bit) = c.to_digit(2) {
+                    bit == 1
+                }
+                else {
+                    panic!("ERROR: Invalid bit \'{}\'", c);
+                }
+            })
+            .collect();
+
+        let data = input_iter
+            .chunks(BITS as usize)
+            .map(|bits| {
+                let mut word = 0;
+                for i in 0..bits.len() {
+                    if bits[i] {
+                        word |= 1 << i;
+                    }
+                }
+
+                word
+            })
+            .collect();
+        
+        Self {
+            inner: Rc::new(RefCell::new(data)),
+            is_negative: false
+        }
     }
 
     pub fn deep_clone(&self) -> Self {
@@ -164,7 +230,27 @@ impl Eq for BigInt {}
 
 impl fmt::Display for BigInt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "test")
+        let mut self_temp = self.deep_clone();
+        let mut output = String::new();
+
+        const MAX_DIGITS: u32 = Word::MAX.ilog10();
+        let max_digits = BigInt::from(10_usize.pow(MAX_DIGITS));
+
+        while self_temp >= max_digits {
+            let digits;
+            (self_temp, digits) = self_ops::arith::div_with_remainder(&self_temp, &max_digits);
+            let inner = digits.inner.borrow();
+            output.extend(format!("{:0<width$}", inner[0], width = MAX_DIGITS as usize).chars().rev());
+        }
+
+        {
+            let inner = self_temp.inner.borrow();
+            output.extend(format!("{}", inner[0]).chars().rev());
+        }
+
+        output = output.chars().rev().collect();
+
+        f.pad_integral(!self.is_negative || self.is_zero(), "0d", &output)
     }
 }
 
@@ -179,10 +265,45 @@ impl fmt::Binary for BigInt {
         }
         
         for byte in inner_iter {
-            output.extend(format!("{:0>8b}", byte).chars());
+            output.extend(format!("{:0>width$b}", byte, width = BITS as usize).chars());
         }
 
         f.pad_integral(!self.is_negative || self.is_zero(), "0b", &output)
+    }
+}
+
+impl fmt::Octal for BigInt {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut self_temp = self.deep_clone();
+        let mut output = String::new();
+
+        const SHIFT_LENGTH: u32 = (BITS / 3) * 3;
+        const OCTETS_MASK: Word = {
+            let mut mask = 0;
+            let mut i = 0;
+            while i < SHIFT_LENGTH {
+                mask |= 1 << i;
+                i += 1;
+            }
+            mask
+        };
+
+        let max_octets = BigInt::from(1 << SHIFT_LENGTH);
+
+        while self_temp >= max_octets {
+            let octets = self_temp.inner.borrow()[0] & OCTETS_MASK;
+            output.extend(format!("{:0<width$o}", octets, width = BITS as usize / 3).chars().rev());
+            self_temp >>= SHIFT_LENGTH;
+        }
+
+        {
+            let octets = self_temp.inner.borrow()[0] & OCTETS_MASK;
+            output.extend(format!("{:o}", octets).chars().rev());
+        }
+
+        output = output.chars().rev().collect();
+
+        f.pad_integral(!self.is_negative || self.is_zero(), "0o", &output)
     }
 }
 
@@ -197,7 +318,7 @@ impl fmt::UpperHex for BigInt {
         }
         
         for byte in inner_iter {
-            output.extend(format!("{:0>2X}", byte).chars());
+            output.extend(format!("{:0>width$X}", byte, width = BITS as usize / 4).chars());
         }
 
         f.pad_integral(!self.is_negative || self.is_zero(), "0X", &output)
@@ -215,7 +336,7 @@ impl fmt::LowerHex for BigInt {
         }
         
         for byte in inner_iter {
-            output.extend(format!("{:0>2x}", byte).chars());
+            output.extend(format!("{:0>width$x}", byte, width = BITS as usize / 4).chars());
         }
 
         f.pad_integral(!self.is_negative || self.is_zero(), "0x", &output)

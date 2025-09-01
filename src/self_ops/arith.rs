@@ -279,7 +279,7 @@ impl RemAssign for BigInt {
     }
 }
 
-fn div_with_remainder(numerator: &BigInt, denominator: &BigInt) -> (BigInt, BigInt) {
+pub fn div_with_remainder(numerator: &BigInt, denominator: &BigInt) -> (BigInt, BigInt) {
     if denominator.is_zero() {
         panic!("Cannot divide by zero!");
     }
@@ -315,16 +315,16 @@ fn div_with_remainder(numerator: &BigInt, denominator: &BigInt) -> (BigInt, BigI
 
     for i in iter {
         let mut dividend = remainder.clone() << BITS;
-        dividend += BigInt {inner: Rc::new(RefCell::new(vec![i])), is_negative: false};
+        dividend += i;
         
         let mut q_digit = 0;
-        while dividend > *denominator {
+        while dividend >= *denominator {
             dividend -= denominator.clone();
             q_digit += 1;
         }
 
         quotient <<= BITS;
-        quotient += BigInt {inner: Rc::new(RefCell::new(vec![q_digit])), is_negative: false};
+        quotient += q_digit;
         
         remainder = dividend;
     }

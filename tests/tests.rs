@@ -5,13 +5,14 @@ mod tests {
     #[test]
     fn test_format() {
         let format_works = BigInt::new_16("1A");
-        let binary_test = BigInt::new_16("1F1A");
+        let binary_test = BigInt::new_2("1111100011010");
         let hex_test = BigInt::new_16("4A609");
         let neg_test = -BigInt::new_16("A1");
         let neg_zero = -BigInt::new_16("0");
         let dec_test = BigInt::new_10("1229026");
+        let oct_test = BigInt::new_8("23546323777");
 
-        assert_eq!(format!("{}", format_works), "test");
+        assert_eq!(format!("{}", format_works), "26");
         assert_eq!(format!("{:b}", binary_test), "1111100011010");
         assert_eq!(format!("{:016b}", binary_test), "0001111100011010");
         assert_eq!(format!("{:X}", hex_test), "4A609");
@@ -21,6 +22,9 @@ mod tests {
         assert_eq!(format!("{:#x}", neg_test), "-0xa1");
         assert_eq!(format!("{:x}", neg_zero), "0");
         assert_eq!(format!("{:x}", dec_test), "12c0e2");
+        assert_eq!(format!("{}", dec_test), "1229026");
+        assert_eq!(format!("{:X}", oct_test), "9D99A7FF");
+        assert_eq!(format!("{:o}", oct_test), "23546323777");
     }
 
     #[test]
