@@ -238,7 +238,7 @@ impl fmt::Display for BigInt {
 
         while self_temp >= max_digits {
             let digits;
-            (self_temp, digits) = self_ops::arith::div_with_remainder(&self_temp, &max_digits);
+            (self_temp, digits) = self_temp.div_with_remainder(&max_digits);
             let inner = digits.inner.borrow();
             output.extend(format!("{:0<width$}", inner[0], width = MAX_DIGITS as usize).chars().rev());
         }
@@ -288,7 +288,7 @@ impl fmt::Octal for BigInt {
             mask
         };
 
-        let max_octets = BigInt::from(1 << SHIFT_LENGTH);
+        let max_octets = BigInt::from((1 as Word) << SHIFT_LENGTH);
 
         while self_temp >= max_octets {
             let octets = self_temp.inner.borrow()[0] & OCTETS_MASK;

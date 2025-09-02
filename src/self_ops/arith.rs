@@ -243,7 +243,7 @@ impl DivAssign for BigInt {
             _ => {}
         }
 
-        (*self, _) = div_with_remainder(&self, &rhs);
+        (*self, _) = self.div_with_remainder(&rhs);
     }
 }
 
@@ -275,61 +275,61 @@ impl RemAssign for BigInt {
             _ => {}
         }
 
-        (_, *self) = div_with_remainder(&self, &rhs);
+        (_, *self) = self.div_with_remainder(&rhs);
     }
 }
 
-pub fn div_with_remainder(numerator: &BigInt, denominator: &BigInt) -> (BigInt, BigInt) {
-    if denominator.is_zero() {
-        panic!("Cannot divide by zero!");
-    }
-    else if numerator.is_zero() {
-        return (numerator.deep_clone(), numerator.deep_clone());
-    }
-    else if numerator < denominator {
-        return (BigInt::new_16("0"), numerator.deep_clone());
-    }
-
-    let inner_l = numerator.inner.borrow();
-    let inner_r = denominator.inner.borrow();
-    let mut iter = inner_l
-        .iter()
-        .map(|x| *x)
-        .rev();
-
-    let mut quotient = BigInt::new_16("0");
-    let mut remainder = {
-        let mut inner = if inner_r.len() > 1 {
-            iter
-                .by_ref()
-                .take(inner_r.len() - 1)
-                .collect()
-        } 
-        else {
-            vec![0]
-        };
-
-        inner.reverse();
-        BigInt { inner: Rc::new(RefCell::new(inner)), is_negative: false }
-    };
-
-    for i in iter {
-        let mut dividend = remainder.clone() << BITS;
-        dividend += i;
-        
-        let mut q_digit = 0;
-        while dividend >= *denominator {
-            dividend -= denominator.clone();
-            q_digit += 1;
+impl BigInt {
+    pub fn div_with_remainder(&self, denominator: &BigInt) -> (BigInt, BigInt) {
+        if denominator.is_zero() {
+            panic!("Cannot divide by zero!");
         }
-
-        quotient <<= BITS;
-        quotient += q_digit;
+        else if self.is_zero() {
+            return (self.deep_clone(), self.deep_clone());
+        }
+        else if self < denominator {
+            return (BigInt::new_16("0"), self.deep_clone());
+        }
+    
+        let inner_l = self.inner.borrow();
+        let inner_r = denominator.inner.borrow();
+        let mut iter = inner_l
+            .iter()
+            .map(|x| *x)
+            .rev();
+    
+        let mut quotient = BigInt::new_16("0");
+        let mut remainder = {
+            let mut inner = if inner_r.len() > 1 {
+                iter
+                    .by_ref()
+                    .take(inner_r.len() - 1)
+                    .collect()
+            } 
+            else {
+                vec![0]
+            };
         
-        remainder = dividend;
+            inner.reverse();
+            BigInt { inner: Rc::new(RefCell::new(inner)), is_negative: false }
+        };
+    
+        for i in iter {
+            remainder <<= BITS;
+            remainder += i;
+            
+            let mut q_digit = 0;
+            while remainder >= *denominator {
+                remainder -= denominator.clone();
+                q_digit += 1;
+            }
+        
+            quotient <<= BITS;
+            quotient += q_digit;
+        }
+    
+        (quotient, remainder)
     }
-
-    (quotient, remainder)
 }
 
 impl Neg for BigInt {
