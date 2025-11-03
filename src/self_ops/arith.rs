@@ -319,10 +319,42 @@ impl BigInt {
             remainder += i;
             
             let mut q_digit = 0;
-            while remainder >= *denominator {
+
+            if remainder >= *denominator {
+                let mut shift_amount = {
+                    let inner_denom = denominator.inner.borrow();
+                    let inner_rem = remainder.inner.borrow();
+                    let get_bit = |x: Vec<Word>| -> Option<u32> {
+                        let x = x.last()?;
+                        x.checked_ilog2()
+                    };
+                    let small_shift = if let (Some(rem_bit), Some(denom_bit)) = (get_bit(inner_rem.to_vec()), get_bit(inner_denom.to_vec())) {
+                        rem_bit - denom_bit
+                    }
+                    else 
+                    {
+                        0
+                    };
+                    BITS * (inner_rem.len() - inner_denom.len()) as u32 + small_shift
+                };
+                let mut denom_temp: BigInt = denominator.deep_clone() << shift_amount;
+
+                
+                while remainder >= *denominator {
+                    while denom_temp > remainder {
+                        denom_temp >>= 1;
+                        shift_amount -= 1;
+                    }
+
+                    remainder -= denom_temp.clone();
+                    q_digit += 1 << shift_amount;
+                }
+            }
+
+            /*while remainder >= *denominator {
                 remainder -= denominator.clone();
                 q_digit += 1;
-            }
+            }*/
         
             quotient <<= BITS;
             quotient += q_digit;
