@@ -321,25 +321,9 @@ impl BigInt {
             let mut q_digit = 0;
 
             if remainder >= *denominator {
-                let mut shift_amount = {
-                    let inner_denom = denominator.inner.borrow();
-                    let inner_rem = remainder.inner.borrow();
-                    let get_bit = |x: Vec<Word>| -> Option<u32> {
-                        let x = x.last()?;
-                        x.checked_ilog2()
-                    };
-                    let small_shift = if let (Some(rem_bit), Some(denom_bit)) = (get_bit(inner_rem.to_vec()), get_bit(inner_denom.to_vec())) {
-                        rem_bit - denom_bit
-                    }
-                    else 
-                    {
-                        0
-                    };
-                    BITS * (inner_rem.len() - inner_denom.len()) as u32 + small_shift
-                };
-                let mut denom_temp: BigInt = denominator.deep_clone() << shift_amount;
+                let mut shift_amount = remainder.ilog_2() - denominator.ilog_2();
+                let mut denom_temp = denominator.deep_clone() << shift_amount;
 
-                
                 while remainder >= *denominator {
                     while denom_temp > remainder {
                         denom_temp >>= 1;
@@ -361,6 +345,25 @@ impl BigInt {
         }
     
         (quotient, remainder)
+    }
+
+    pub fn checked_ilog2(&self) -> Option<u32> {
+        if !self.is_zero() && !self.is_negative {
+            let inner = self.inner.borrow();
+            Some(inner.last()?.checked_ilog2()? + (inner.len() - 1) as u32 * BITS)
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn ilog_2(&self) -> u32 {
+        if let Some(log) = self.checked_ilog2() {
+            log
+        }
+        else {
+            panic!("argument of integer logarithm must be positive")
+        }
     }
 }
 
