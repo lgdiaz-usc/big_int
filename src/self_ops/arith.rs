@@ -357,12 +357,137 @@ impl BigInt {
         }
     }
 
+    pub fn checked_ilog10(&self) -> Option<u32> {
+        if !self.is_zero() && !self.is_negative {
+            let mut val = self.deep_clone();
+            let mut log = 0;
+
+            let pow10 = (100_000_000_000_000_000_000_000_000_000_000 as u128).into();
+            while val >= pow10 {
+                val /= pow10.clone();
+                log += 32
+            }
+
+            let pow10 = (10_000_000_000_000_000 as u64).into();
+            while val >= pow10 {
+                val /= pow10.clone();
+                log += 16
+            }
+
+            let pow10 = (10_000_000_000 as u64).into();
+            while val >= pow10 {
+                val /= pow10.clone();
+                log += 10
+            }
+
+            let pow10 = 100_000.into();
+            while val >= pow10 {
+                val /= pow10.clone();
+                log += 5
+            }
+
+            let pow10 = 10.into();
+            while val >= pow10 {
+                val /= pow10.clone();
+                log += 1
+            }
+
+            Some(log)
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn checked_ilog(&self, base: &Self) -> Option<u32> {
+        if *self <= 0.into() || *base <= 0.into() {
+            None
+        }
+        else if self < base {
+            Some(0)
+        }
+        else {
+            let mut n = self.ilog_2() / (base.ilog_2() + 1);
+            let mut r = base.pow(&n.into());
+
+            let ratio = self.clone() / base.clone();
+            while r <= ratio {
+                n += 1;
+                r *= base.clone();
+            }
+
+            Some(n)
+        }
+    }
+
+    pub fn checked_pow(&self, exponent: &BigInt) -> Option<BigInt> {
+        if exponent.is_zero() {
+            return Some(1.into())
+        }
+        else if exponent.is_negative {
+            let one = 1.into();
+            if *self == one {
+                return Some(one)
+            }
+            else if self.is_zero() {
+                return None
+            }
+            else if *self == -one.clone() {
+                return Some(BigInt {inner: one.inner, is_negative: exponent.inner.borrow()[0] & 1 == 1})
+            }
+            else {
+                return Some(0.into())
+            }
+        }
+
+        let mut product = self.deep_clone();
+
+        let mut i: BigInt = 1.into();
+        while i < *exponent {
+            product *= self.clone();
+            i += 1;
+        }
+
+        Some(product)
+    }
+
+    #[track_caller]
     pub fn ilog_2(&self) -> u32 {
         if let Some(log) = self.checked_ilog2() {
             log
         }
         else {
             panic!("argument of integer logarithm must be positive")
+        }
+    }
+
+    #[track_caller]
+    pub fn ilog10(&self) -> u32 {
+        if let Some(log) = self.checked_ilog10() {
+            log
+        }
+        else {
+            panic!("argument of integer logarithm must be positive")
+        }
+    }
+
+    #[track_caller]
+    pub fn ilog(&self, base: &Self) -> u32 {
+        if let Some(log) = self.checked_ilog(base) {
+            log
+        }
+        else {
+            panic!("argument of integer logarithm must be positive")
+        }
+    }
+    
+    #[track_caller]
+    pub fn pow(&self, exponent: &BigInt) -> BigInt {
+        if let Some(product) = self.checked_pow(exponent) {
+            product
+        }
+        else {
+            panic!("cannot divide by zero")
         }
     }
 }
