@@ -321,7 +321,7 @@ impl BigInt {
             let mut q_digit = 0;
 
             if remainder >= *denominator {
-                let mut shift_amount = remainder.ilog_2() - denominator.ilog_2();
+                let mut shift_amount = remainder.ilog2() - denominator.ilog2();
                 let mut denom_temp = denominator.deep_clone() << shift_amount;
 
                 while remainder >= *denominator {
@@ -407,7 +407,7 @@ impl BigInt {
             Some(0)
         }
         else {
-            let mut n = self.ilog_2() / (base.ilog_2() + 1);
+            let mut n = self.ilog2() / (base.ilog2() + 1);
             let mut r = base.pow(&n.into());
 
             let ratio = self.clone() / base.clone();
@@ -451,8 +451,37 @@ impl BigInt {
         Some(product)
     }
 
+    pub fn checked_isqrt(&self) -> Option<BigInt> {
+        if self.is_negative {
+            return None
+        }
+        else if *self == 1.into() {
+            return Some(self.deep_clone())
+        }
+        else {
+            let mut root: BigInt = self.clone() >> 1;
+
+            let mut i: BigInt = root.clone() >> 1;
+            while !i.is_zero() {
+                match (root.clone() * root.clone()).cmp(&self.clone()) {
+                    std::cmp::Ordering::Less => root += i.clone(),
+                    std::cmp::Ordering::Equal => return Some(root),
+                    std::cmp::Ordering::Greater => root -= i.clone(),
+                }
+                i >>= 1;
+            }
+
+            if (root.clone() * root.clone()) <= *self {
+                return Some(root)
+            }
+            else {
+                return Some(root - 1)
+            }
+        }
+    }
+
     #[track_caller]
-    pub fn ilog_2(&self) -> u32 {
+    pub fn ilog2(&self) -> u32 {
         if let Some(log) = self.checked_ilog2() {
             log
         }
@@ -488,6 +517,16 @@ impl BigInt {
         }
         else {
             panic!("cannot divide by zero")
+        }
+    }
+
+    #[track_caller]
+    pub fn isqrt(&self) -> BigInt {
+        if let Some(root) = self.checked_isqrt() {
+            root
+        }
+        else {
+            panic!("argument of integer square root must not be negative")
         }
     }
 }
