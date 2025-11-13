@@ -186,4 +186,14 @@ mod tests {
         assert_eq!(BigInt::new_10(&i_32.to_string()), i_32.into());
         assert_eq!(BigInt::new_10(&i_64.to_string()), i_64.into());
     }
+
+    #[test]
+    fn test_misc_math() {
+        let test_num_128: u128 = 0x2389dfa90c887e987b2f;
+        let test_num_big: BigInt = test_num_128.into();
+
+        assert_eq!(format!("{:x}", test_num_big.clone().ilog_2()), format!("{:x}", test_num_128.ilog2()));
+        assert_eq!(format!("{:x}", test_num_big.clone().ilog10()), format!("{:x}", test_num_128.ilog10()));
+        assert_eq!(format!("{:x}", test_num_big.clone().ilog(&13.into())), format!("{:x}", test_num_128.ilog(13)));
+    }
 }
